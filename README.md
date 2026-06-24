@@ -1,291 +1,429 @@
 # 校园失物招领管理系统
 
-Web 应用开发课程大作业 —— 校园失物招领管理平台，提供失物/拾物发布、认领申请、管理员审核、通知推送等功能。
+Web 应用开发课程大作业。系统提供用户注册登录、失物/拾物发布、认领申请、管理员审核、通知推送、过期处理等功能。
 
 ## 技术栈
 
-| 层级 | 技术 | 版本 |
+| 模块 | 技术 |
+| --- | --- |
+| 后端 | Java 17, Spring Boot 3.3.5, Spring Security, JWT, MyBatis-Plus, Maven |
+| 前端 | Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, pnpm |
+| 数据 | MySQL 8.x, Redis 7.x |
+| 文档 | Swagger UI / OpenAPI |
+
+## 项目结构
+
+```text
+StudentLostPropertyPlatform/
+├── backend/                    # Spring Boot 后端服务
+│   ├── src/main/resources/
+│   │   └── application.yml      # 后端主配置，可用环境变量覆盖
+│   ├── pom.xml
+│   └── README.md
+├── frontend/                   # Next.js 前端应用
+│   ├── .env.example             # 前端环境变量样例
+│   ├── package.json
+│   └── src/
+├── sql/
+│   ├── schema.sql               # 建库建表脚本
+│   └── data.sql                 # 初始化测试数据
+├── docs/                        # 需求、设计、测试、部署文档
+├── docker-compose.yml           # Docker 方式启动 MySQL + Redis
+└── README.md
+```
+
+## 启动方式选择
+
+| 方式 | 适用场景 | 启动内容 |
 | --- | --- | --- |
-| 后端框架 | Spring Boot | 3.3.5 |
-| 语言 | Java | 17 |
-| 安全 | Spring Security + JWT | jjwt 0.12.6 |
-| ORM | MyBatis-Plus | 3.5.9 |
-| 数据库 | MySQL | 8.0+ |
-| 缓存 | Redis | 7.0+ |
-| 前端框架 | Next.js (App Router) | 16 |
-| UI 库 | React + shadcn/ui + Tailwind CSS | 19 / 4 |
-| 包管理 | pnpm | 10+ |
+| Docker 依赖服务 + 本地前后端 | 推荐开发方式，不污染本机 MySQL / Redis | Docker 启动 MySQL 和 Redis，本机启动后端和前端 |
+| 完全本地启动 | 已安装本机 MySQL / Redis | 本机启动 MySQL、Redis、后端、前端 |
 
-## 跨平台开发环境配置
+> 当前 `docker-compose.yml` 只编排 MySQL 和 Redis，前端、后端仍按开发模式在本机启动。
 
-### 前置依赖
+## 前置依赖
 
-无论使用什么操作系统，你都需要安装以下工具：
+| 工具 | 推荐版本 | 用途 |
+| --- | --- | --- |
+| JDK | 17 | 运行 Spring Boot 后端 |
+| Maven | 3.9+ | 后端依赖管理和启动 |
+| Node.js | 20+ | 运行 Next.js 前端 |
+| pnpm | 10+ | 前端依赖管理 |
+| Docker Desktop | 最新稳定版 | Docker 方式启动 MySQL / Redis |
+| MySQL | 8.x | 完全本地启动时使用 |
+| Redis | 7.x | 完全本地启动时使用 |
 
-| 工具 | macOS | Windows | Linux |
+macOS 可用 Homebrew 安装：
+
+```bash
+brew install openjdk@17 maven node pnpm
+```
+
+如果采用 Docker 依赖服务，还需要安装并启动 Docker Desktop。
+
+## 配置文件说明
+
+### 后端配置
+
+后端主配置文件：
+
+```text
+backend/src/main/resources/application.yml
+```
+
+如果你不想把本机 MySQL / Redis 密码改成项目默认的 `68562520`，需要修改这个文件中的连接配置，或在启动后端时用环境变量覆盖。需要关注的配置位置是：
+
+```yaml
+spring:
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/lost_found?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:68562520}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:68562520}
+      database: ${REDIS_DATABASE:0}
+```
+
+推荐优先用环境变量覆盖，避免把个人本机密码写进仓库文件：
+
+```bash
+cd backend
+MYSQL_PASSWORD="你的 MySQL 密码" REDIS_PASSWORD="你的 Redis 密码" mvn spring-boot:run
+```
+
+如果是课程作业或本机单人开发，也可以直接修改 `backend/src/main/resources/application.yml` 里的默认值。
+
+常用环境变量如下，未设置时使用默认值：
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `SERVER_PORT` | `8080` | 后端服务端口 |
+| `MYSQL_URL` | `jdbc:mysql://localhost:3306/lost_found?...` | MySQL JDBC 地址 |
+| `MYSQL_USERNAME` | `root` | MySQL 用户名 |
+| `MYSQL_PASSWORD` | `68562520` | MySQL 密码 |
+| `REDIS_HOST` | `localhost` | Redis 主机 |
+| `REDIS_PORT` | `6379` | Redis 端口 |
+| `REDIS_PASSWORD` | `68562520` | Redis 密码 |
+| `REDIS_DATABASE` | `0` | Redis 数据库编号 |
+| `JWT_SECRET` | `lost-found-platform-jwt-secret-at-least-32-bytes-long` | JWT 签名密钥 |
+| `JWT_EXPIRATION` | `86400000` | JWT 过期时间，单位毫秒 |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | 允许访问后端的前端地址 |
+
+### 前端配置
+
+前端配置样例文件：
+
+```text
+frontend/.env.example
+```
+
+本地开发时复制为：
+
+```bash
+cp frontend/.env.example frontend/.env.local
+```
+
+可配置项：
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080/api` | 浏览器访问后端 API 的地址 |
+
+### 数据库脚本
+
+| 文件 | 说明 |
+| --- | --- |
+| `sql/schema.sql` | 创建 `lost_found` 数据库和业务表 |
+| `sql/data.sql` | 初始化测试用户和演示数据 |
+
+Docker 首次启动 MySQL 容器时会自动执行这两个脚本。若 MySQL 数据卷已经存在，脚本不会重复执行；需要重新初始化时先删除数据卷。
+
+## 方式一：Docker 依赖服务 + 本地前后端开发
+
+这是推荐的开发启动方式。
+
+### 1. 启动 MySQL 和 Redis
+
+在项目根目录执行：
+
+```bash
+docker compose up -d
+```
+
+确认容器状态：
+
+```bash
+docker compose ps
+```
+
+默认会启动：
+
+| 服务 | 容器名 | 端口 | 账号 / 密码 |
 | --- | --- | --- | --- |
-| **JDK 17** | `brew install openjdk@17` | [Adoptium JDK 17](https://adoptium.net/download/) 或 [Oracle JDK 17](https://www.oracle.com/java/technologies/downloads/#java17) | `apt install openjdk-17-jdk` |
-| **Maven** | `brew install maven` 或 IntelliJ IDEA 内置 | 下载 [Maven](https://maven.apache.org/download.cgi) 解压并配置 PATH，或 IntelliJ IDEA 内置 | `apt install maven` |
-| **MySQL 8.0+** | `brew install mysql` | [MySQL Installer for Windows](https://dev.mysql.com/downloads/installer/) | `apt install mysql-server` |
-| **Redis 7.0+** | `brew install redis` | [Memurai](https://www.memurai.com/get-memurai) 或 WSL2 内安装 | `apt install redis-server` |
-| **Node.js 20+** | `brew install node@20` 或 [nvm](https://github.com/nvm-sh/nvm) | [Node.js 官网](https://nodejs.org/) 下载 LTS | [nvm](https://github.com/nvm-sh/nvm) |
-| **pnpm 10+** | `npm install -g pnpm` | `npm install -g pnpm` | `npm install -g pnpm` |
-| **Git** | `brew install git` | [Git for Windows](https://git-scm.com/download/win) | `apt install git` |
+| MySQL | `lost-found-mysql` | `3306` | `root` / `68562520` |
+| Redis | `lost-found-redis` | `6379` | 密码 `68562520` |
 
-### Windows 本地环境详细配置
-
-#### 1. 安装 JDK 17
-
-从 [Adoptium](https://adoptium.net/download/) 下载 JDK 17 的 `.msi` 安装包，安装时勾选 **"Set JAVA_HOME variable"**。
-
-验证安装：
-
-```powershell
-java -version
-# 应显示: openjdk version "17.0.x" ...
-```
-
-#### 2. 安装 MySQL
-
-从 [MySQL Installer for Windows](https://dev.mysql.com/downloads/installer/) 下载安装包，选择 "Developer Default" 安装类型。
-
-关键配置步骤：
-- 选择 **MySQL Server 8.0**（不是 8.4）
-- Authentication Method: 选择 **"Use Legacy Authentication Method"**
-- 设置 root 密码为：**`68562520`**（与项目默认配置一致）
-- 确保端口为 **`3306`**
-
-安装完成后，MySQL 会作为 Windows 服务自动运行。
-
-#### 3. 安装 Redis（Memurai）
-
-Redis 官方不支持 Windows，推荐使用 **Memurai**（与 Redis 完全兼容的 Windows 原生替代品，免费用于开发）：
-
-1. 从 [Memurai 官网](https://www.memurai.com/get-memurai) 下载安装包
-2. 安装时设置密码为：**`68562520`**
-3. 默认端口 **`6379`**，安装完成后自动作为 Windows 服务运行
-
-> 备选方案：如果你已安装 WSL2，也可在 WSL 内 `sudo apt install redis-server` 然后修改 `/etc/redis/redis.conf` 设置 `requirepass 68562520`。
-
-#### 4. 安装 Node.js + pnpm
-
-从 [Node.js 官网](https://nodejs.org/) 下载 LTS 版本（20.x 或更高），安装后打开 PowerShell：
-
-```powershell
-npm install -g pnpm
-```
-
-#### 5. 安装 Git
-
-从 [Git for Windows](https://git-scm.com/download/win) 下载安装。安装时注意：
-- 选择 **"Checkout as-is, commit Unix-style line endings"**（避免换行符问题）
-- 其他选项保持默认即可
-
-### 快速启动（所有平台通用）
-
-以下步骤在 macOS、Windows（PowerShell / Git Bash）、Linux 下均可执行。
-
-#### 1. 克隆项目
+如果需要重置数据库：
 
 ```bash
-git clone https://github.com/mt-obdvlb/StudentLostPropertyPlatform.git
-cd StudentLostPropertyPlatform
+docker compose down -v
+docker compose up -d
 ```
 
-#### 2. 初始化数据库
-
-确保 MySQL 服务已启动，然后执行 SQL 初始化脚本：
-
-**macOS / Linux**：
-
-```bash
-mysql -uroot -p68562520 < sql/schema.sql
-mysql -uroot -p68562520 < sql/data.sql
-```
-
-**Windows（PowerShell）**：
-
-```powershell
-Get-Content sql/schema.sql | mysql -uroot -p68562520
-Get-Content sql/data.sql | mysql -uroot -p68562520
-```
-
-**Windows（Git Bash）**：
-
-```bash
-mysql -uroot -p68562520 < sql/schema.sql
-mysql -uroot -p68562520 < sql/data.sql
-```
-
-> 如果 `mysql` 命令找不到，需要将 MySQL 的 `bin` 目录（通常是 `C:\Program Files\MySQL\MySQL Server 8.0\bin`）添加到系统 PATH 环境变量。
-
-#### 3. 启动 Redis
-
-**macOS**：
-
-```bash
-brew services start redis
-```
-
-**Windows**：Memurai 安装后自动以服务运行，无需手动启动。如果使用 WSL 内的 Redis，在 WSL 终端中执行 `sudo service redis-server start`。
-
-**Linux**：
-
-```bash
-sudo systemctl start redis-server
-```
-
-#### 4. 启动后端
+### 2. 启动后端
 
 ```bash
 cd backend
 mvn spring-boot:run
 ```
 
-> **Windows 用户推荐**：用 IntelliJ IDEA 打开 `backend/` 目录，等待 Maven 依赖下载完成后直接运行 `LostFoundApplication` 主类，无需手动配置 Maven。
+macOS 如需强制使用 JDK 17：
 
-后端启动后访问：http://localhost:8080/swagger-ui/index.html
+```bash
+cd backend
+JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn spring-boot:run
+```
 
-#### 5. 启动前端
+后端启动成功后访问：
+
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+
+### 3. 启动前端
+
+另开一个终端：
 
 ```bash
 cd frontend
 pnpm install
-cp .env.example .env.local      # Windows: copy .env.example .env.local
+cp .env.example .env.local
 pnpm dev
 ```
 
-前端启动后访问：http://localhost:3000
+前端访问地址：
 
-### 环境变量参考
+```text
+http://localhost:3000
+```
 
-所有配置都有默认值，无需修改即可本地运行。**前提是你的 MySQL 和 Redis 密码与默认值一致**。
+## 方式二：完全本地启动
 
-如需自定义，可通过环境变量覆盖：
+如果不使用 Docker，需要本机自行启动 MySQL 和 Redis，并保证账号、密码、端口与后端配置一致。
 
-**后端**（`application.yml` 中的默认值）：
+### 1. 初始化 MySQL
 
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `MYSQL_URL` | `jdbc:mysql://localhost:3306/lost_found` | 数据库连接 |
-| `MYSQL_USERNAME` | `root` | 数据库用户名 |
-| `MYSQL_PASSWORD` | `68562520` | 数据库密码 |
-| `REDIS_HOST` | `localhost` | Redis 地址 |
-| `REDIS_PORT` | `6379` | Redis 端口 |
-| `REDIS_PASSWORD` | `68562520` | Redis 密码 |
-| `JWT_SECRET` | （内置默认值） | JWT 签名密钥 |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | 允许的前端来源 |
+确保 MySQL 正在运行后，在项目根目录执行：
 
-**前端**（`frontend/.env.local`）：
+```bash
+mysql -uroot -p68562520 < sql/schema.sql
+mysql -uroot -p68562520 < sql/data.sql
+```
 
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080/api` | 后端 API 地址 |
+如果你的 MySQL 密码不是 `68562520`，可以初始化时使用自己的密码，并在启动后端时覆盖环境变量，或直接修改 `backend/src/main/resources/application.yml` 中的 `spring.datasource.password` 默认值：
 
-> 如果你的 MySQL / Redis 密码与默认值 `68562520` 不同，请在启动后端时设置环境变量：
-> ```bash
-> # Windows PowerShell 示例
-> $env:MYSQL_PASSWORD="你的密码"
-> $env:REDIS_PASSWORD="你的密码"
-> mvn spring-boot:run
-> ```
+```bash
+MYSQL_PASSWORD="你的密码" mvn spring-boot:run
+```
 
-### 端口占用
+### 2. 启动 Redis
 
-| 服务 | 端口 |
-| --- | --- |
-| 前端 (Next.js) | 3000 |
-| 后端 (Spring Boot) | 8080 |
-| MySQL | 3306 |
-| Redis | 6379 |
+macOS：
+
+```bash
+brew services start redis
+```
+
+Linux：
+
+```bash
+sudo systemctl start redis-server
+```
+
+Windows 原生 Redis 可使用 Memurai，或在 WSL2 中启动 Redis。
+
+如果 Redis 没有设置密码，需要启动后端时覆盖为空值，或直接修改 `backend/src/main/resources/application.yml` 中的 `spring.data.redis.password` 默认值：
+
+```bash
+REDIS_PASSWORD="" mvn spring-boot:run
+```
+
+### 3. 启动后端和前端
+
+后端：
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+前端：
+
+```bash
+cd frontend
+pnpm install
+cp .env.example .env.local
+pnpm dev
+```
+
+## 跨端访问配置
+
+默认配置适合本机浏览器访问：
+
+```text
+前端: http://localhost:3000
+后端: http://localhost:8080
+API:  http://localhost:8080/api
+```
+
+如果要从手机、平板或局域网其他电脑访问，需要把 `localhost` 改成开发机局域网 IP。
+
+假设开发机 IP 是 `192.168.1.10`：
+
+前端 `frontend/.env.local`：
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://192.168.1.10:8080/api
+```
+
+后端启动时允许该前端来源：
+
+```bash
+cd backend
+CORS_ALLOWED_ORIGINS="http://192.168.1.10:3000,http://localhost:3000,http://127.0.0.1:3000" mvn spring-boot:run
+```
+
+然后在其他设备访问：
+
+```text
+http://192.168.1.10:3000
+```
+
+## 常用开发命令
+
+### Docker
+
+```bash
+docker compose up -d      # 启动 MySQL + Redis
+docker compose ps         # 查看服务状态
+docker compose logs -f    # 查看日志
+docker compose down       # 停止服务，保留数据卷
+docker compose down -v    # 停止服务并删除数据卷
+```
+
+### 后端
+
+```bash
+cd backend
+mvn spring-boot:run       # 启动开发服务
+mvn test                  # 运行测试
+mvn package               # 打包 jar
+```
+
+### 前端
+
+```bash
+cd frontend
+pnpm install              # 安装依赖
+pnpm dev                  # 启动开发服务
+pnpm lint                 # ESLint 检查
+pnpm build                # 生产构建
+pnpm start                # 启动生产构建
+```
 
 ## 测试账号
 
 | 角色 | 用户名 | 密码 |
 | --- | --- | --- |
-| 管理员 | admin | admin123456 |
-| 普通用户 | user1 | user123456 |
-| 普通用户 | user2 | user123456 |
-
-## 项目结构
-
-```text
-StudentLostPropertyPlatform/
-├── backend/                        # Spring Boot 后端
-│   ├── src/main/java/.../          # 源码（common/module/job）
-│   ├── src/main/resources/         # 配置 + SQL
-│   └── pom.xml                     # Maven 依赖
-├── frontend/                       # Next.js 前端
-│   ├── src/app/                    # 路由页面
-│   ├── src/components/             # UI 组件
-│   ├── src/lib/                    # API / Hooks / Store / Types
-│   └── package.json
-├── sql/                            # 数据库初始化脚本
-│   ├── schema.sql                  # 建表
-│   └── data.sql                    # 种子数据
-├── docs/                           # 设计文档
-│   ├── 01-requirements.md          # 需求分析
-│   ├── 02-architecture.md          # 系统架构
-│   ├── 03-database-design.md       # 数据库设计
-│   ├── 04-api-design.md            # API 设计
-│   ├── 05-frontend-design.md       # 前端设计
-│   ├── 06-backend-design.md        # 后端设计
-│   ├── 07-test-cases.md            # 测试用例
-│   ├── 08-deployment.md            # 部署说明
-│   ├── 09-ai-usage.md              # AI 使用说明
-│   └── 10-frontend-impl-plan.md    # 前端实现计划
-├── docker-compose.yml              # Docker 方式（可选，用于快速搭建 MySQL + Redis）
-└── README.md
-```
+| 管理员 | `admin` | `admin123456` |
+| 普通用户 | `user1` | `user123456` |
+| 普通用户 | `user2` | `user123456` |
 
 ## 核心功能
 
-- 用户注册 / 登录 / JWT 认证
-- 发布失物招领 / 拾物招领信息
-- 搜索、筛选、分页、排序
-- 对拾物信息提交认领申请
+- 用户注册、登录、JWT 认证
+- 发布失物 / 拾物信息
+- 信息搜索、筛选、分页、排序
+- 拾物认领申请
 - 发布前重复信息检测
-- 管理员审核认领（通过 / 驳回）
-- 物品状态自动流转（进行中 → 已认领 / 已过期）
+- 管理员审核认领申请
 - 管理员下架物品、用户管理、操作日志
-- 通知推送（认领创建 / 审核结果 / 物品过期）
-- 定时任务每小时自动过期处理
+- 通知推送
+- 定时任务自动处理过期物品
+
+## 验证入口
+
+启动完成后按顺序检查：
+
+1. `docker compose ps` 中 MySQL 和 Redis 为健康或运行状态。
+2. `http://localhost:8080/swagger-ui/index.html` 能打开 Swagger UI。
+3. `http://localhost:3000` 能打开前端页面。
+4. 使用测试账号 `admin / admin123456` 或 `user1 / user123456` 登录。
 
 ## 常见问题
 
-### macOS
+### MySQL 连接失败
 
-- **Maven 依赖下载失败**：配置阿里云 Maven 镜像，编辑 `~/.m2/settings.xml`，添加 `https://maven.aliyun.com/repository/public` 镜像源。
-- **Lombok 编译报错**：确保使用 JDK 17，不要使用更高版本的 JDK（Lombok 1.18.x 不兼容 JDK 26+）。
-- **端口冲突**：macOS 可能自带 Apache 占用 8080，执行 `sudo lsof -i :8080` 查看并关闭。
-- **Homebrew MySQL 启动**：`brew services start mysql`，首次启动后需设置 root 密码：`mysqladmin -u root password '68562520'`。
+检查 `MYSQL_URL`、`MYSQL_USERNAME`、`MYSQL_PASSWORD` 是否与实际 MySQL 一致。Docker 方式默认是：
 
-### Windows
+```text
+jdbc:mysql://localhost:3306/lost_found
+root / 68562520
+```
 
-- **`mysql` 命令找不到**：将 MySQL 的 `bin` 目录（默认 `C:\Program Files\MySQL\MySQL Server 8.0\bin`）添加到系统 PATH 环境变量。右键"此电脑"→ 属性 → 高级系统设置 → 环境变量 → Path → 新建。
-- **Maven 找不到命令**：将 Maven 的 `bin` 目录添加到系统 PATH 环境变量。或直接使用 IntelliJ IDEA 打开项目，IDE 内置 Maven 无需额外配置。
-- **PowerShell 执行策略限制 `mvn` 命令**：以管理员身份运行 PowerShell，执行 `Set-ExecutionPolicy RemoteSigned`。
-- **`pnpm dev` 报错**：确保在 `frontend/` 目录下执行，且已运行 `pnpm install`。如果 `pnpm` 命令找不到，先执行 `npm install -g pnpm`。
-- **MySQL 连接失败 (Access denied)**：检查 MySQL 安装时设置的 root 密码是否为 `68562520`。如果密码不同，通过环境变量 `MYSQL_PASSWORD` 覆盖。
-- **Redis 连接失败**：Memurai 默认应自动运行。检查任务管理器 → 服务 → 确认 "Memurai" 状态为"正在运行"。
-- **Git 换行符问题**：安装 Git for Windows 时选择 "Checkout as-is, commit Unix-style line endings" 即可避免。
+### Redis 连接失败
 
-### Linux
+检查 Redis 是否运行，密码是否为 `68562520`。Docker 方式可用：
 
-- **MySQL root 密码**：Ubuntu/Debian 默认通过 `auth_socket` 认证，需先修改密码：`sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '68562520';"`。
-- **Redis 密码**：编辑 `/etc/redis/redis.conf`，找到 `# requirepass foobared`，改为 `requirepass 68562520`，然后 `sudo systemctl restart redis-server`。
-- **Maven 内存不足**：`export MAVEN_OPTS="-Xmx512m"` 限制 Maven 堆内存。
+```bash
+docker compose logs redis
+```
 
-## 文档入口
+### 数据没有初始化
 
-- 后端运行说明：[backend/README.md](backend/README.md)
-- 前端运行说明：[frontend/README.md](frontend/README.md)
-- 需求分析：[docs/01-requirements.md](docs/01-requirements.md)
-- 系统架构：[docs/02-architecture.md](docs/02-architecture.md)
-- 数据库设计：[docs/03-database-design.md](docs/03-database-design.md)
-- API 设计：[docs/04-api-design.md](docs/04-api-design.md)
-- 前端设计：[docs/05-frontend-design.md](docs/05-frontend-design.md)
-- 后端设计：[docs/06-backend-design.md](docs/06-backend-design.md)
-- 测试用例：[docs/07-test-cases.md](docs/07-test-cases.md)
-- 部署说明：[docs/08-deployment.md](docs/08-deployment.md)
-- AI 使用说明：[docs/09-ai-usage.md](docs/09-ai-usage.md)
+Docker 只会在 MySQL 数据卷第一次创建时执行 `sql/schema.sql` 和 `sql/data.sql`。如需重建：
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+### 前端请求后端失败
+
+检查 `frontend/.env.local` 中的 `NEXT_PUBLIC_API_BASE_URL` 是否指向真实后端地址。如果是手机或局域网设备访问，不能使用 `localhost`，需要改为开发机 IP。
+
+### 端口被占用
+
+默认端口如下：
+
+| 服务 | 端口 |
+| --- | --- |
+| 前端 | `3000` |
+| 后端 | `8080` |
+| MySQL | `3306` |
+| Redis | `6379` |
+
+macOS / Linux 可用以下命令查看占用：
+
+```bash
+lsof -i :3000
+lsof -i :8080
+lsof -i :3306
+lsof -i :6379
+```
+
+## 更多文档
+
+- [后端运行说明](backend/README.md)
+- [前端运行说明](frontend/README.md)
+- [需求分析](docs/01-requirements.md)
+- [系统架构](docs/02-architecture.md)
+- [数据库设计](docs/03-database-design.md)
+- [API 设计](docs/04-api-design.md)
+- [前端设计](docs/05-frontend-design.md)
+- [后端设计](docs/06-backend-design.md)
+- [测试用例](docs/07-test-cases.md)
+- [部署说明](docs/08-deployment.md)
+- [AI 使用说明](docs/09-ai-usage.md)

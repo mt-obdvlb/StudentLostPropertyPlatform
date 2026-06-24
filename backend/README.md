@@ -48,6 +48,34 @@ backend/
 
 ## 数据库初始化
 
+后端主配置文件位于：
+
+```text
+backend/src/main/resources/application.yml
+```
+
+默认连接本机 MySQL 和 Redis，密码均为 `68562520`。如果你的本机 MySQL / Redis 不想改成这个密码，需要修改 `application.yml` 中的默认值，或启动时用环境变量覆盖：
+
+```bash
+MYSQL_PASSWORD="你的 MySQL 密码" REDIS_PASSWORD="你的 Redis 密码" mvn spring-boot:run
+```
+
+对应配置项：
+
+```yaml
+spring:
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/lost_found?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:68562520}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:68562520}
+      database: ${REDIS_DATABASE:0}
+```
+
 使用本机 MySQL：
 
 ```bash
