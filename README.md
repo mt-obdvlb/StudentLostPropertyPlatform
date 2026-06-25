@@ -43,20 +43,35 @@ StudentLostPropertyPlatform/
 
 ## 前置依赖
 
-| 工具 | 推荐版本 | 用途 |
-| --- | --- | --- |
-| JDK | 17 | 运行 Spring Boot 后端 |
-| Maven | 3.9+ | 后端依赖管理和启动 |
-| Node.js | 20+ | 运行 Next.js 前端 |
-| pnpm | 10+ | 前端依赖管理 |
-| Docker Desktop | 最新稳定版 | Docker 方式启动 MySQL / Redis |
-| MySQL | 8.x | 完全本地启动时使用 |
-| Redis | 7.x | 完全本地启动时使用 |
+| 工具 | 推荐版本 | macOS | Windows | Linux |
+| --- | --- | --- | --- | --- |
+| JDK | 17 | `brew install openjdk@17` | 安装 [Adoptium Temurin 17](https://adoptium.net/) 或 Oracle JDK 17 | `sudo apt install openjdk-17-jdk` |
+| Maven | 3.9+ | `brew install maven` | 安装 [Maven](https://maven.apache.org/download.cgi) 并配置 `PATH`，或使用 IntelliJ IDEA 内置 Maven | `sudo apt install maven` |
+| Node.js | 20+ | `brew install node` 或 `nvm` | 安装 Node.js LTS，或使用 `nvm-windows` | `nvm` 或系统包管理器 |
+| pnpm | 10+ | `corepack enable` 或 `npm install -g pnpm` | `corepack enable` 或 `npm install -g pnpm` | `corepack enable` 或 `npm install -g pnpm` |
+| Docker Desktop | 最新稳定版 | 安装 Docker Desktop for Mac | 安装 Docker Desktop for Windows，并启用 WSL2 后端 | 安装 Docker Engine / Docker Desktop |
+| MySQL | 8.x | `brew install mysql` | MySQL Installer for Windows | `sudo apt install mysql-server` |
+| Redis | 7.x | `brew install redis` | 推荐 Docker / WSL2 / Memurai | `sudo apt install redis-server` |
 
-macOS 可用 Homebrew 安装：
+macOS 常用安装命令：
 
 ```bash
 brew install openjdk@17 maven node pnpm
+```
+
+Windows 建议：
+
+- 使用 PowerShell 或 Git Bash 执行项目命令。
+- 安装 JDK 时确认 `JAVA_HOME` 已配置到 JDK 17。
+- 安装 Maven、Node.js 后重新打开终端，确认 `java -version`、`mvn -version`、`node -v`、`pnpm -v` 可用。
+- Docker 方式开发时，优先用 Docker Desktop 启动 MySQL / Redis，避免单独安装 Windows 原生 Redis。
+
+Linux 可按发行版选择包管理器，Ubuntu / Debian 示例：
+
+```bash
+sudo apt update
+sudo apt install openjdk-17-jdk maven nodejs npm mysql-server redis-server
+npm install -g pnpm
 ```
 
 如果采用 Docker 依赖服务，还需要安装并启动 Docker Desktop。
@@ -203,6 +218,15 @@ cp .env.example .env.local
 pnpm dev
 ```
 
+Windows PowerShell 中复制 env 文件可用：
+
+```powershell
+cd frontend
+pnpm install
+Copy-Item .env.example .env.local
+pnpm dev
+```
+
 前端访问地址：
 
 ```text
@@ -222,10 +246,24 @@ mysql -uroot -p68562520 < sql/schema.sql
 mysql -uroot -p68562520 < sql/data.sql
 ```
 
+Windows PowerShell 不推荐使用 `<` 重定向，可用：
+
+```powershell
+Get-Content sql/schema.sql | mysql -uroot -p68562520
+Get-Content sql/data.sql | mysql -uroot -p68562520
+```
+
 如果你的 MySQL 密码不是 `68562520`，可以初始化时使用自己的密码，并在启动后端时覆盖环境变量，或直接修改 `backend/src/main/resources/application.yml` 中的 `spring.datasource.password` 默认值：
 
 ```bash
 MYSQL_PASSWORD="你的密码" mvn spring-boot:run
+```
+
+Windows PowerShell 对应写法：
+
+```powershell
+$env:MYSQL_PASSWORD="你的密码"
+mvn spring-boot:run
 ```
 
 ### 2. 启动 Redis
@@ -250,6 +288,13 @@ Windows 原生 Redis 可使用 Memurai，或在 WSL2 中启动 Redis。
 REDIS_PASSWORD="" mvn spring-boot:run
 ```
 
+Windows PowerShell 对应写法：
+
+```powershell
+$env:REDIS_PASSWORD=""
+mvn spring-boot:run
+```
+
 ### 3. 启动后端和前端
 
 后端：
@@ -265,6 +310,15 @@ mvn spring-boot:run
 cd frontend
 pnpm install
 cp .env.example .env.local
+pnpm dev
+```
+
+Windows PowerShell：
+
+```powershell
+cd frontend
+pnpm install
+Copy-Item .env.example .env.local
 pnpm dev
 ```
 
@@ -293,6 +347,14 @@ NEXT_PUBLIC_API_BASE_URL=http://192.168.1.10:8080/api
 ```bash
 cd backend
 CORS_ALLOWED_ORIGINS="http://192.168.1.10:3000,http://localhost:3000,http://127.0.0.1:3000" mvn spring-boot:run
+```
+
+Windows PowerShell：
+
+```powershell
+cd backend
+$env:CORS_ALLOWED_ORIGINS="http://192.168.1.10:3000,http://localhost:3000,http://127.0.0.1:3000"
+mvn spring-boot:run
 ```
 
 然后在其他设备访问：
@@ -413,6 +475,23 @@ lsof -i :8080
 lsof -i :3306
 lsof -i :6379
 ```
+
+Windows PowerShell 可用：
+
+```powershell
+netstat -ano | findstr :3000
+netstat -ano | findstr :8080
+netstat -ano | findstr :3306
+netstat -ano | findstr :6379
+```
+
+### Windows 常见问题
+
+- `mysql` 命令找不到：把 MySQL 的 `bin` 目录加入系统 `Path`，常见路径是 `C:\Program Files\MySQL\MySQL Server 8.0\bin`。
+- `mvn` 命令找不到：把 Maven 的 `bin` 目录加入系统 `Path`，或用 IntelliJ IDEA 打开 `backend/` 后直接运行 `LostFoundApplication`。
+- `JAVA_HOME` 不正确：确认 `JAVA_HOME` 指向 JDK 17，而不是 JRE 或其它 JDK 版本。
+- PowerShell 不能使用 `< sql/schema.sql`：改用 `Get-Content sql/schema.sql | mysql -uroot -p68562520`。
+- Redis 原生安装麻烦：优先用本项目 Docker Compose 启动 Redis，或使用 WSL2 / Memurai。
 
 ## 更多文档
 
